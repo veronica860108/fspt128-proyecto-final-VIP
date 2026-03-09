@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import String, Boolean, Integer, ForeignKey
+from sqlalchemy import String, Integer, ForeignKey, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from flask_bcrypt import check_password_hash, generate_password_hash
 from typing import List
@@ -7,12 +7,16 @@ from typing import List
 
 db = SQLAlchemy()
 
+
+
+
+
 class User(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(nullable=False)
  
-    calificaciones_realizadas: Mapped[List["Calificaciones"]] = relationship(back_populates="profesor")
+   
 
     def serialize(self):
         return {
@@ -20,6 +24,33 @@ class User(db.Model):
             "email": self.email,
         }
     
+class Profesor(db.Model):
+    __tablename__ = "profesor"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(
+        String(120), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    salones: Mapped[List["Salon"]] = relationship(
+        back_populates="profesor",
+        cascade="all, delete-orphan"
+    )
+
+    calificaciones_realizadas: Mapped[List["Calificacion"]] = relationship(
+        back_populates="profesor",
+        cascade="all, delete-orphan"
+    )
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "nombre": self.nombre,
+            "email": self.email,
+        }
+
+
     def set_password(self,password):
         self.password = generate_password_hash(password).decode('utf-8')
 
@@ -27,27 +58,35 @@ class User(db.Model):
         return check_password_hash(self.password,password)
 
 
-class Estudiantes(db.Model):
-    __tablename__ = "estudiantes"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nombre: Mapped[str] =mapped_column(String(40),nullable=False)
-    apellidos: Mapped[str] =mapped_column(String(40),nullable=False)
-    email: Mapped[str] =mapped_column(String(40),nullable=False)
-    password: Mapped[str] =mapped_column(String(40),nullable=False)
 
-    salon_id: Mapped[int] = mapped_column(Integer, ForeignKey("salon.id"),nullable=False)
-    calificaciones: Mapped[List["Calificaciones"]] = relationship(back_populates="estudiante")
-    salon: Mapped["Salon"] = relationship(back_populates="alumnos")
-    ####es N-n?
-   
+class Alumno(db.Model):
+    __tablename__ = "alumno"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(
+        String(120), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(
+        String(255), nullable=True)
+    salon_id: Mapped[int] = mapped_column(
+        ForeignKey("salon.id"), nullable=False)
+
+    salon: Mapped["Salon"] = relationship(
+        back_populates="alumnos"
+    )
+
+    calificaciones: Mapped[List["Calificacion"]] = relationship(
+        back_populates="alumno",
+        cascade="all, delete-orphan"
+    )
     def serialize(self):
-        return{
-            "estudiante_id":self.id,
-            "nombre":self.nombre,
-            "apellidos":self.apellidos,
-            "email":self.email,
+        return {
+            "id": self.id,
+            "nombre": self.nombre,
+            "email": self.email,
+            "salon_id": self.salon_id
         }
-    
+
     def set_password(self,password):
         self.password = generate_password_hash(password).decode('utf-8')
 
@@ -56,49 +95,115 @@ class Estudiantes(db.Model):
     
 class Salon(db.Model):
     __tablename__ = "salon"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    asignatura: Mapped[str] = mapped_column(String(80),nullable=False)
-    profesor_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"))
-    estudiante_id: Mapped[str]= mapped_column(String(80),nullable=False)
 
-    alumnnos = Mapped[List["Estudiantes"]]= relationship( back_populates="salon")
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(50), nullable=False)
+    profesor_id: Mapped[int] = mapped_column(
+        ForeignKey("profesor.id"), nullable=False)
 
+    profesor: Mapped["Profesor"] = relationship(
+        back_populates="salones"
+    )
 
-    def serialize(self):
-        return{
-            "salon_id":self.id,
-            "asignatura":self.asignatura,
-            "estudiante_id": self.estudiantes_id
-        }
-    
-class Calificaciones(db.Model):
-    __tablename__ = "calificaciones"
+    alumnos: Mapped[List["Alumno"]] = relationship(
+        back_populates="salon",
+        cascade="all, delete-orphan"
+    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    calificacion: Mapped[int] = mapped_column(nullable=True)
-    
-    estudiantes_id: Mapped[int] = mapped_column(Integer,ForeignKey="estudiantes.id")
-    profesor_id:Mapped[int] = mapped_column(Integer,ForeignKey="user.id") 
-    estudiante: Mapped["Estudiantes"] =relationship(back_populates="calificaiones")
-    profesor: Mapped["User"] = relationship(back_populates="calificaiones_realizadas")
+    materias_asignadas: Mapped[List["SalonMateria"]] = relationship(
+        back_populates="salon",
+        cascade="all, delete-orphan"
+    )
 
-    
 
 
     def serialize(self):
         return {
-            "calificacion_id": self.id,
-            "calificacion": self.calificacion,
+            "id": self.id,
+            "nombre": self.nombre,
+            "profesor_id": self.profesor_id
         }
     
-class Asignatura(db.Model):
-    __tablename__ = "asignatura"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    asignatura: Mapped[str] = mapped_column(String(120), nullable=True)
+class Calificacion(db.Model):
+    __tablename__ = "calificacion"
 
-    salones_asignados: Mapped[List["Salon"]] = relationship(back_populates="asignatura")
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    profesor_id: Mapped[int] = mapped_column(
+        ForeignKey("profesor.id"), nullable=False)
+    alumno_id: Mapped[int] = mapped_column(
+        ForeignKey("alumno.id"), nullable=False)
+    salon_materia_id: Mapped[int] = mapped_column(
+        ForeignKey("salon_materia.id"), nullable=False)
+    nota: Mapped[float] = mapped_column(Float, nullable=False)
+
+    profesor: Mapped["Profesor"] = relationship(
+        back_populates="calificaciones_realizadas"
+    )
+
+    alumno: Mapped["Alumno"] = relationship(
+        back_populates="calificaciones"
+    )
+
+    salon_materia: Mapped["SalonMateria"] = relationship(
+        back_populates="calificaciones"
+    )
+
     def serialize(self):
         return {
-            "nombre_asignatura": self.nombre_asignatura,
-            "asignatura_id": self.asignatura_id,
+            "id": self.id,
+            "profesor_id": self.profesor_id,
+            "alumno_id": self.alumno_id,
+            "salon_materia_id": self.salon_materia_id,
+            "nota": self.nota
+        }   
+
+    
+class Materia(db.Model):
+    __tablename__ = "materia"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(
+        String(120), unique=True, nullable=False)
+
+    salones_asignados: Mapped[List["SalonMateria"]] = relationship(
+        back_populates="materia",
+        cascade="all, delete-orphan"
+    )
+
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "nombre": self.nombre
+        }
+    
+class SalonMateria(db.Model):
+    __tablename__ = "salon_materia"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    salon_id: Mapped[int] = mapped_column(
+        ForeignKey("salon.id"), nullable=False)
+    materia_id: Mapped[int] = mapped_column(
+        ForeignKey("materia.id"), nullable=False)
+
+    salon: Mapped["Salon"] = relationship(
+        back_populates="materias_asignadas"
+    )
+
+    materia: Mapped["Materia"] = relationship(
+        back_populates="salones_asignados"
+    )
+
+    calificaciones: Mapped[List["Calificacion"]] = relationship(
+        back_populates="salon_materia",
+        cascade="all, delete-orphan"
+    )
+
+
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "salon_id": self.salon_id,
+            "materia_id": self.materia_id
         }
